@@ -20,5 +20,6 @@ CREATE TABLE IF NOT EXISTS {table} (
     USER_NAME       VARCHAR,
     MACHINE         VARCHAR,
     APP_VERSION     VARCHAR,
-    MESSAGE         VARCHAR
+    MESSAGE         VARCHAR,
+    DATA_HASH       VARCHAR         -- fingerprint of the model's source rows at refresh time
 )

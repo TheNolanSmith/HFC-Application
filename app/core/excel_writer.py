@@ -37,6 +37,16 @@ def assert_not_open(path: Path) -> None:
         raise WorkbookLocked(f"{name} is open in Excel on this PC. Close it and retry.")
 
 
+def _header_width(headers) -> int:
+    """Number of consecutive non-blank header cells from the start column."""
+    n = 0
+    for h in _flat(headers):
+        if h is None or str(h).strip() == "":
+            break
+        n += 1
+    return n
+
+
 def _flat(v) -> list:
     if isinstance(v, (list, tuple)):
         return [x for item in v for x in _flat(item)]
@@ -118,7 +128,8 @@ class XlwingsWriter:
                 except ImportError:
                     pass
 
-    def write(self, path: Path, frames: dict[str, tuple[SheetLayout, pd.DataFrame]], log=print) -> dict[str, int]:
+    def write(self, path: Path, frames: dict[str, tuple[SheetLayout, pd.DataFrame]], log=print,
+              clear_sheets: list[str] | None = None) -> dict[str, int]:
         assert_not_open(path)
         wb = self.app.books.open(str(path), update_links=False)
         try:
@@ -129,6 +140,17 @@ class XlwingsWriter:
             for section, (layout, df) in frames.items():
                 log(f"Writing {len(df):,} rows to '{layout.sheet}'")
                 counts[section] = self._write_sheet(wb.sheets[layout.sheet], layout, df, log)
+            for name in clear_sheets or []:
+                # New model from template: drop the template's sample rows (typed values only;
+                # formulas such as Financial Start/End stay).
+                sh = wb.sheets[name]
+                last = sh.used_range.last_cell
+                if last.row >= 2:
+                    log(f"Clearing sample data on '{name}'")
+                    try:
+                        sh.range((2, 1), (last.row, last.column)).api.SpecialCells(2).ClearContents()
+                    except Exception:
+                        pass  # no constants to clear
             log("Refreshing pivots / queries")
             wb.api.RefreshAll()
             try:
@@ -149,10 +171,13 @@ class XlwingsWriter:
         n, ncols = len(df), max(len(df.columns), 1)
         last_old = sh.used_range.last_cell.row
         fcols = col_range(lay.formula_cols)
+        # Clear as wide as the header row (or the new data, if wider) so no stale columns survive.
+        headers = sh.range((lay.header_row, start), (lay.header_row, start + max(ncols, 60) - 1)).value
+        width = max(ncols, _header_width(headers))
 
         # 1. clear old data block (values only - formats and headers untouched)
         if last_old >= first:
-            sh.range((first, start), (last_old, start + ncols - 1)).clear_contents()
+            sh.range((first, start), (last_old, start + width - 1)).clear_contents()
 
         # 2. bulk write in chunks
         rows = to_rows(df)
@@ -190,7 +215,8 @@ class OpenpyxlWriter:
     def __exit__(self, *exc):
         return False
 
-    def write(self, path: Path, frames: dict[str, tuple[SheetLayout, pd.DataFrame]], log=print) -> dict[str, int]:
+    def write(self, path: Path, frames: dict[str, tuple[SheetLayout, pd.DataFrame]], log=print,
+              clear_sheets: list[str] | None = None) -> dict[str, int]:
         from openpyxl import load_workbook
 
         assert_not_open(path)
@@ -199,6 +225,11 @@ class OpenpyxlWriter:
         for section, (layout, df) in frames.items():
             log(f"Writing {len(df):,} rows to '{layout.sheet}'")
             counts[section] = self._write_sheet(wb[layout.sheet], layout, df)
+        for name in clear_sheets or []:
+            for row in wb[name].iter_rows(min_row=2):
+                for c in row:
+                    if not (isinstance(c.value, str) and c.value.startswith("=")):
+                        c.value = None
         for ws in wb.worksheets:
             for pv in getattr(ws, "_pivots", []):
                 pv.cache.refreshOnLoad = True
@@ -214,9 +245,11 @@ class OpenpyxlWriter:
         n, ncols = len(df), max(len(df.columns), 1)
         last_old = ws.max_row
         fcols = col_range(lay.formula_cols)
+        headers = [ws.cell(lay.header_row, c).value for c in range(start, start + max(ncols, 60))]
+        width = max(ncols, _header_width(headers))
 
         for r in range(first, last_old + 1):
-            for c in range(start, start + ncols):
+            for c in range(start, start + width):
                 ws.cell(r, c).value = None
         for i, row in enumerate(to_rows(df)):
             for j, v in enumerate(row):

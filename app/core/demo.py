@@ -28,13 +28,9 @@ def _make_workbook(path, level):
     spread["A1"].font = Font(bold=True, size=14)
     tb = wb.create_sheet("TB")
     if level == "L3":
-        # mirrors layouts.L3.tb: formulas in A:R, export lands at S
-        _header(tb, 1, 1, ["Period", "Key"])
-        _header(tb, 1, 19, ["L3_CODE", "PERIOD_END_DATE", "PORTCO_ACCOUNT", "PORTCO_ACCOUNT_DESC",
-                            "HFC_ACCOUNT", "PERIODIC_BALANCE", "PERPETUAL_BALANCE"])
-        tb["A2"] = '=IF(T2="","",TEXT(T2,"yyyy-mm"))'
-        tb["B2"] = '=IF(S2="","",S2&"|"&W2)'
-        spread["A3"], spread["B3"] = "Total periodic", "=SUM(TB!X:X)"
+        _header(tb, 1, 1, ["L3_CODE", "PERIOD_END_DATE", "PORTCO_ACCOUNT", "PORTCO_ACCOUNT_DESC",
+                           "HFC_ACCOUNT", "PERIODIC_BALANCE", "PERPETUAL_BALANCE"])
+        spread["A3"], spread["B3"] = "Total periodic", "=SUM(TB!F:F)"
     else:
         _header(tb, 1, 1, ["L3_CODE", "PERIOD_END_DATE", "HFC_ACCOUNT", "PERIODIC_BALANCE", "PERPETUAL_BALANCE"])
         spread["A3"], spread["B3"] = "Total periodic", "=SUM(TB!D:D)"

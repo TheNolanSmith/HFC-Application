@@ -10,6 +10,8 @@ snowflake:
   account: ""                    # e.g. abc12345.us-east-1  or  orgname-acctname
   user: ""                       # your Snowflake login, e.g. NSMITH@HFCOMPANIES.COM
   # How you sign in:
+  #   dbt_profile     -> borrow account/user/key from ~/.dbt/profiles.yml (set dbt_profile,
+  #                      optionally dbt_target / dbt_profiles_path). Nothing secret stored here.
   #   externalbrowser -> SSO pop-up (Azure AD / Okta). Token is cached, so you
   #                      only see the pop-up every few hours, not every query.
   #   snowflake_jwt   -> key pair. Set private_key_file; passphrase (if any) goes
@@ -26,6 +28,10 @@ paths:
   # Root of the SharePoint library synced to your PC. Model file paths in
   # config/models.csv can be relative to this.
   models_root: ""
+  # Copied into <company>/.Models/<CODE>_TB (Adjusted TB).xlsx when an L3 has no new-template
+  # model yet (and the L2 equivalent). Blank = don't auto-create.
+  l3_template: ""
+  l2_template: ""
   # Local backups taken before every write (kept off SharePoint on purpose).
   backups_dir: "~/HFC-Application/backups"
   keep_backups: 5               # per model
@@ -52,8 +58,8 @@ layouts:
     tb:
       sheet: TB
       header_row: 1
-      data_start_col: S
-      formula_cols: "A:R"
+      data_start_col: A
+      formula_cols: ""
       table_name: ""
     legend:
       sheet: Legend

@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 
 from core import config, status, ui
+from core.discovery import template_for
 from core.sources import SqlNotConfigured
 
 ui.header("Status board", "Which L3 and L2 models are behind what's in Snowflake.")
@@ -25,7 +26,8 @@ except Exception as e:
     st.stop()
 c2.caption(f"Snowflake checked {checked:%I:%M %p} · log from {ui.refresh_log().read()[1]}")
 
-board = status.board(models, fresh, ui.refresh_log().last_success(), config.models_root(s))
+board = status.board(models, fresh, ui.refresh_log().last_success(), config.models_root(s),
+                     {lv for lv in config.LEVELS if template_for(s, lv)})
 stale = board[board["Status"].isin(status.NEEDS_REFRESH)]
 problems = board[board["Status"].isin(["Missing file", "No data"])]
 
@@ -85,6 +87,7 @@ with st.expander("What the statuses mean"):
 - 🆕 **Never refreshed** — no successful run in the log yet.
 - 🟢 **Current** — nothing new since the last refresh.
 - ⚠️ **No data** — none of the model's L3 codes are in the freshness query.
+- ✨ **New model** — no new-template workbook yet; refreshing copies the template into the company's .Models folder and loads it.
 - ⛔ **Missing file** — the workbook isn't at the path in the Models page (SharePoint not synced, or moved).
 """
     )

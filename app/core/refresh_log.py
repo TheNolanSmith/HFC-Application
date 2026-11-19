@@ -23,7 +23,7 @@ LOCAL_DB = DATA_DIR / "refresh_log.db"
 FIELDS = [
     "RUN_ID", "BATCH_ID", "MODEL_ID", "MODEL_NAME", "LEVEL", "L3_CODES", "FILE_PATH", "STATUS",
     "TB_ROWS", "LEGEND_ROWS", "THROUGH_PERIOD", "DATA_LOADED_AT", "STARTED_AT", "FINISHED_AT",
-    "SECONDS", "USER_NAME", "MACHINE", "APP_VERSION", "MESSAGE",
+    "SECONDS", "USER_NAME", "MACHINE", "APP_VERSION", "MESSAGE", "DATA_HASH",
 ]
 
 
@@ -52,6 +52,7 @@ class RunRecord:
     MACHINE: str = field(default_factory=platform.node)
     APP_VERSION: str = APP_VERSION
     MESSAGE: str = ""
+    DATA_HASH: str | None = None
 
     def finish(self, status: str, message: str = "") -> "RunRecord":
         self.STATUS = status
@@ -70,6 +71,10 @@ def _local(db: Path = LOCAL_DB) -> sqlite3.Connection:
     db.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(db, detect_types=sqlite3.PARSE_DECLTYPES)
     con.execute(f"CREATE TABLE IF NOT EXISTS refresh_log ({', '.join(FIELDS)})")
+    have = {r[1].upper() for r in con.execute("PRAGMA table_info(refresh_log)")}
+    for f in FIELDS:
+        if f not in have:  # columns added in later versions
+            con.execute(f"ALTER TABLE refresh_log ADD COLUMN {f}")
     return con
 
 
@@ -123,6 +128,7 @@ class RefreshLog:
         ddl = (SQL_DIR / "refresh_log_table.sql").read_text(encoding="utf-8")
         ddl = "\n".join(l for l in ddl.splitlines() if not l.strip().startswith("--")).format(table=self.table)
         self.source.execute(ddl)
+        self.source.execute(f"ALTER TABLE {self.table} ADD COLUMN IF NOT EXISTS DATA_HASH VARCHAR")
         self._table_ready = True
 
     def write(self, rec: RunRecord) -> None:

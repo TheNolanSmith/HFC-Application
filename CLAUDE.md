@@ -12,8 +12,15 @@ Local Streamlit app (Windows, launched from a desktop shortcut) that refreshes L
   - `excel_writer.py`: `XlwingsWriter` for real runs, `OpenpyxlWriter` for demo mode and tests. On any error the workbook is closed without saving.
   - `refresh.py`: orchestration. Order is L3s then L2s, with one Excel instance per batch. Backup, then export, then write, then log.
   - `refresh_log.py`: always writes to local SQLite (`data/refresh_log.db`); also writes to the Snowflake table if configured. Never raises.
+  - `discovery.py`: L3 files live at `<Company Financials>/<CODE>_<Name>/.Models/<CODE>_TB (Adjusted TB).xlsx` (the new template). Old `<CODE>_TBv6.0 (Adjusted TB).xlsm` files are ignored. If the new file is missing and `paths.l3_template` is set, the refresh copies the template there first (status "New model"). On a fresh copy, the Legend sample rows are cleared (constants only) when no Legend export runs.
   - `status.py`: board statuses (Missing file, No data, Never refreshed, New period, Updated data, Current).
 - `data/` is git-ignored: local log, demo workbooks, app.log.
+
+## Workbook facts (from Model Templates.md in the templates folder; read it for anything deeper)
+- L3 TB: 17 columns A:Q, header row 1, no formula columns. L2 TB: 15 columns A:O.
+- Report sheets read only the pivots (one cache on the TB, refresh on open). RefreshAll after the write is enough.
+- Legend: database columns plus formula columns (Financial Start/End MINIFS/MAXIFS). The Legend mart doesn't exist yet. When it does, the layout may need per-column handling, because the formulas sit in the middle of the table.
+- Never save real models with openpyxl; it damages pivots, charts and external links. openpyxl is only for demo mode and tests.
 
 ## Rules
 - Never change the user's workbook headers or formats. Only the data block and the formula fill-down.

@@ -5,22 +5,25 @@ from pathlib import Path
 
 import pandas as pd
 
+from .refresh import combined_hash
 from .registry import Model
 
 # Ordered most- to least-urgent; the board sorts by this.
-STATUS_ORDER = ["Missing file", "No data", "Never refreshed", "New period", "Updated data", "Current"]
+STATUS_ORDER = ["Missing file", "New model", "No data", "Never refreshed", "New period", "Updated data", "Current"]
 STATUS_ICON = {
     "Missing file": "⛔",
+    "New model": "✨",
     "No data": "⚠️",
     "Never refreshed": "🆕",
     "New period": "🔴",
     "Updated data": "🟠",
     "Current": "🟢",
 }
-NEEDS_REFRESH = {"Never refreshed", "New period", "Updated data"}
+NEEDS_REFRESH = {"New model", "Never refreshed", "New period", "Updated data"}
 
 
-def model_status(model: Model, fresh: pd.DataFrame, last_ok: pd.DataFrame, root: Path) -> dict:
+def model_status(model: Model, fresh: pd.DataFrame, last_ok: pd.DataFrame, root: Path,
+                 can_create: bool = False) -> dict:
     all_codes = fresh["L3_CODE"].tolist()
     codes = model.resolve_codes(all_codes)
     sub = fresh[fresh["L3_CODE"].isin(codes)]
@@ -35,16 +38,22 @@ def model_status(model: Model, fresh: pd.DataFrame, last_ok: pd.DataFrame, root:
     prev = last_ok.loc[model.model_id] if model.model_id in last_ok.index else None
     through = prev["THROUGH_PERIOD"] if prev is not None else None
     snap = prev["DATA_LOADED_AT"] if prev is not None else None
+    now_hash = combined_hash(sub) if len(sub) else None
+    prev_hash = prev.get("DATA_HASH") if prev is not None else None
+    if prev_hash is not None and pd.isna(prev_hash):
+        prev_hash = None
 
     if not path.exists():
-        status = "Missing file"
+        status = "New model" if can_create and path.parent.parent.exists() and len(sub) else "Missing file"
     elif sub.empty:
         status = "No data"
     elif prev is None:
         status = "Never refreshed"
     elif through is None or pd.isna(through) or latest_period > through:
         status = "New period"
-    elif snap is None or pd.isna(snap) or latest_load > snap:
+    elif now_hash and prev_hash:
+        status = "Updated data" if now_hash != prev_hash else "Current"
+    elif snap is None or pd.isna(snap) or latest_load is None or pd.isna(latest_load) or latest_load > snap:
         status = "Updated data"
     else:
         status = "Current"
@@ -67,8 +76,10 @@ def model_status(model: Model, fresh: pd.DataFrame, last_ok: pd.DataFrame, root:
     }
 
 
-def board(models: list[Model], fresh: pd.DataFrame, last_ok: pd.DataFrame, root: Path) -> pd.DataFrame:
-    rows = [model_status(m, fresh, last_ok, root) for m in models]
+def board(models: list[Model], fresh: pd.DataFrame, last_ok: pd.DataFrame, root: Path,
+          creatable_levels: set[str] | None = None) -> pd.DataFrame:
+    creatable_levels = creatable_levels or set()
+    rows = [model_status(m, fresh, last_ok, root, m.level in creatable_levels) for m in models]
     df = pd.DataFrame(rows)
     if df.empty:
         return df

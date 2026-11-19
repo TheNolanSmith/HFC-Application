@@ -1,14 +1,31 @@
--- L3 TB EXPORT -> written to the L3 model's TB sheet (see layouts.L3.tb in settings).
---
--- Paste your existing L3 TB export query here. Columns come out in the order you
--- SELECT them and land starting at layouts.L3.tb.data_start_col, so match the
--- TB sheet's column order. Headers in the workbook are left alone.
---
--- Filter on the L3 code with:   WHERE L3_CODE IN %(l3_codes)s
--- (the app passes a tuple; for an L3 model it holds that one code)
-SELECT *
-FROM <<HFC_DATA.MARTS.YOUR_TB_MART>>
-WHERE L3_CODE IN %(l3_codes)s
-  -- Skip rows where both periodic and perpetual balances are zero
-  AND NOT (COALESCE(PERIODIC_BALANCE, 0) = 0 AND COALESCE(PERPETUAL_BALANCE, 0) = 0)
-ORDER BY PERIOD_END_DATE, ACCOUNT_NUMBER
+-- L3 TB EXPORT -> the L3 model's TB sheet (layouts.L3.tb in settings).
+-- Columns land left-to-right starting at layouts.L3.tb.data_start_col, in this order.
+-- %(l3_codes)s = the model's one L3 code. YTD + prior 3 years; all-zero rows dropped.
+SELECT
+    DATE,
+    L3,
+    L4,
+    FINANCIAL_REPORT,
+    MAPPING_NUMBER_FINANCIAL,
+    MAPPING_NAME_FINANCIAL,
+    MAPPING_NUMBER_HIGH,
+    MAPPING_NAME_HIGH,
+    MAPPING_NUMBER_MID,
+    MAPPING_NAME_MID,
+    MAPPING_NUMBER_LOW,
+    MAPPING_NAME_LOW,
+    PORTCO_ACCOUNT_NUMBER,
+    PORTCO_ACCOUNT_DESCRIPTION,
+    COALESCE(PERIODIC, 0) * -1       AS PERIODIC,
+    COALESCE(PERPETUAL_YTD, 0) * -1  AS PERPETUAL,
+    ACQUISITION_DETAIL
+FROM HFC_DATA.MARTS.MART_ACCOUNT_ACTUALS_DETAILS
+WHERE L3 IN %(l3_codes)s
+  AND DATE >= (
+        SELECT DATE_TRUNC('YEAR', DATEADD(YEAR, -3, MAX(DATE)))
+        FROM HFC_DATA.MARTS.MART_ACCOUNT_ACTUALS_DETAILS
+        WHERE L3 IN %(l3_codes)s
+      )
+  AND NOT (ABS(COALESCE(PERIODIC, 0)) < 0.0005
+       AND ABS(COALESCE(PERPETUAL_YTD, 0)) < 0.0005)
+ORDER BY DATE, L4, PORTCO_ACCOUNT_NUMBER

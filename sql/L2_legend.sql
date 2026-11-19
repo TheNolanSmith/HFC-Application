@@ -1,6 +1,3 @@
--- L2 LEGEND EXPORT -> written to the L2 model's Legend sheet.
--- Delete this file if the L2 has no Legend export; the app then skips that step.
-SELECT *
-FROM <<HFC_DATA.MARTS.YOUR_LEGEND_TABLE>>
-WHERE L3_CODE IN %(l3_codes)s
-ORDER BY 1
+-- L2 LEGEND EXPORT -> the L2 model's Legend sheet.
+-- Switched off: this file has no query, so refreshes skip the Legend.
+-- To turn it on, paste the Legend query below, filtered with  WHERE L3 IN %(l3_codes)s

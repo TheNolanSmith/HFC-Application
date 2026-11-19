@@ -11,6 +11,7 @@ from typing import Callable
 import pandas as pd
 
 from .config import SECTIONS, backups_dir, layout_for, models_root
+from .discovery import create_from_template, template_for
 from .excel_writer import make_writer
 from .refresh_log import RefreshLog, RunRecord, new_id
 from .registry import Model
@@ -26,6 +27,15 @@ class Result:
     @property
     def ok(self) -> bool:
         return self.record.STATUS == "SUCCESS"
+
+
+def combined_hash(sub: pd.DataFrame) -> str | None:
+    """One fingerprint for all of a model's L3 codes (None if the freshness query has no DATA_HASH)."""
+    h = sub.sort_values("L3_CODE")["DATA_HASH"].tolist() if "DATA_HASH" in sub else []
+    if not h or any(x is None for x in h):
+        return None
+    import hashlib
+    return hashlib.md5("|".join(f"{c}:{x}" for c, x in zip(sorted(sub["L3_CODE"]), h)).encode()).hexdigest()
 
 
 def backup(path: Path, dest_root: Path, model_id: str, keep: int = 5) -> Path:
@@ -71,14 +81,20 @@ def refresh_models(
                 MODEL_ID=m.model_id, MODEL_NAME=m.name, LEVEL=m.level, L3_CODES=",".join(codes),
                 FILE_PATH=str(path), STARTED_AT=datetime.now().replace(microsecond=0), BATCH_ID=batch_id,
             )
+            created = False
             try:
                 if not path.exists():
-                    raise FileNotFoundError(f"Model file not found: {path}")
+                    tmpl = template_for(settings, m.level)
+                    if tmpl is None:
+                        raise FileNotFoundError(f"Model file not found: {path}")
+                    if not path.parent.parent.exists():
+                        raise FileNotFoundError(f"Company folder not found: {path.parent.parent}")
                 if not codes:
                     raise RuntimeError(f"No L3 codes resolved from '{m.l3_codes}'")
                 sub = fresh[fresh["L3_CODE"].isin(codes)]
                 rec.THROUGH_PERIOD = sub["LATEST_PERIOD"].max() if len(sub) else None
                 rec.DATA_LOADED_AT = sub["LAST_LOADED_AT"].max() if len(sub) else None
+                rec.DATA_HASH = combined_hash(sub)
                 if isinstance(rec.DATA_LOADED_AT, pd.Timestamp):
                     rec.DATA_LOADED_AT = rec.DATA_LOADED_AT.to_pydatetime()
 
@@ -98,14 +114,26 @@ def refresh_models(
                 if frames["tb"][1].empty:
                     raise RuntimeError("TB export returned 0 rows - refusing to wipe the model's TB.")
 
-                b = backup(path, backups_dir(settings), m.model_id, settings.get("paths", {}).get("keep_backups", 5))
-                log(f"Backed up to {b}")
-                counts = writer.write(path, frames, log=log)
+                if not path.exists():
+                    create_from_template(template_for(settings, m.level), path)
+                    created = True
+                    log(f"Created {path.name} from template")
+                else:
+                    b = backup(path, backups_dir(settings), m.model_id, settings.get("paths", {}).get("keep_backups", 5))
+                    log(f"Backed up to {b}")
+                clear = [lay.sheet for sec in ("legend",) if created and sec not in frames
+                         and (lay := layout_for(settings, m.level, sec))]
+                counts = writer.write(path, frames, log=log, clear_sheets=clear)
                 rec.TB_ROWS = counts.get("tb")
                 rec.LEGEND_ROWS = counts.get("legend")
-                rec.finish("SUCCESS", f"Through {rec.THROUGH_PERIOD}")
+                rec.finish("SUCCESS", ("New model from template. " if created else "") + f"Through {rec.THROUGH_PERIOD}")
                 log(f"✓ Done in {rec.SECONDS}s")
             except Exception as e:
+                if created and path.exists():  # don't leave a half-built new model behind
+                    try:
+                        path.unlink()
+                    except OSError:
+                        pass
                 rec.finish("FAILED", f"{type(e).__name__}: {e}")
                 log(f"✗ {type(e).__name__}: {e}")
                 log(traceback.format_exc(limit=3))
