@@ -1,0 +1,76 @@
+# HFC Application settings
+# install.ps1 copies this to config/settings.yaml on first install.
+# settings.yaml is git-ignored -- keep anything machine- or person-specific there.
+
+# Run with fake data and sample workbooks (no Snowflake, no real models touched).
+# Flip to false once the snowflake block and the sql/ files are filled in.
+demo_mode: true
+
+snowflake:
+  account: ""                    # e.g. abc12345.us-east-1  or  orgname-acctname
+  user: ""                       # your Snowflake login, e.g. NSMITH@HFCOMPANIES.COM
+  # How you sign in:
+  #   externalbrowser -> SSO pop-up (Azure AD / Okta). Token is cached, so you
+  #                      only see the pop-up every few hours, not every query.
+  #   snowflake_jwt   -> key pair. Set private_key_file; passphrase (if any) goes
+  #                      in the SNOWFLAKE_PRIVATE_KEY_PASSPHRASE environment variable.
+  #   snowflake       -> username + password from the SNOWFLAKE_PASSWORD env variable.
+  authenticator: externalbrowser
+  private_key_file: ""
+  role: ""
+  warehouse: ""
+  database: HFC_DATA
+  schema: MARTS
+
+paths:
+  # Root of the SharePoint library synced to your PC. Model file paths in
+  # config/models.csv can be relative to this.
+  models_root: ""
+  # Local backups taken before every write (kept off SharePoint on purpose).
+  backups_dir: "~/HFC-Application/backups"
+  keep_backups: 5               # per model
+
+logging:
+  # Team-wide refresh log. Created automatically if your role can CREATE TABLE
+  # in that schema. Leave blank to log locally only.
+  snowflake_table: HFC_DATA.ADMIN.MODEL_REFRESH_LOG
+
+excel:
+  engine: xlwings               # xlwings drives real Excel (keeps pivots, slicers, macros)
+  chunk_rows: 50000             # rows written per call -- lower if Excel struggles
+  visible: false                # true = watch Excel work (handy when debugging)
+
+# Where each export lands inside the workbook, per model level.
+#   sheet           sheet name
+#   header_row      row holding the column headers (data starts the row below)
+#   data_start_col  first column the query results are written into
+#   formula_cols    columns with formulas to fill down to the last data row ("" = none).
+#                   The formulas in the first data row are the template.
+#   table_name      optional Excel Table (ListObject) to resize to the new data
+layouts:
+  L3:
+    tb:
+      sheet: TB
+      header_row: 1
+      data_start_col: S
+      formula_cols: "A:R"
+      table_name: ""
+    legend:
+      sheet: Legend
+      header_row: 1
+      data_start_col: A
+      formula_cols: ""
+      table_name: ""
+  L2:
+    tb:
+      sheet: TB
+      header_row: 1
+      data_start_col: A
+      formula_cols: ""
+      table_name: ""
+    legend:
+      sheet: Legend
+      header_row: 1
+      data_start_col: A
+      formula_cols: ""
+      table_name: ""

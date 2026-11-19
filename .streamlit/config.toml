@@ -1,0 +1,18 @@
+[theme]
+base = "light"
+primaryColor = "#B8955A"
+backgroundColor = "#F7F7F8"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1C2230"
+
+[server]
+headless = true
+port = 8517
+address = "localhost"
+runOnSave = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"

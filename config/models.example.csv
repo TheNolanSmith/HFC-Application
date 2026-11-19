@@ -1,0 +1,3 @@
+model_id,level,name,l3_codes,file_path,active,notes
+L3_EXAMPLE,L3,Example Co,XXXX,L3 Models/XXXX_TB (Adjusted TB).xlsx,FALSE,Replace with a real L3 - path is relative to models_root
+L2_EXAMPLE,L2,Example Group,prefix:A,L2 Models/HFC_Model - Example Group.xlsx,FALSE,prefix:A = every L3 code starting with A; or list codes: ARCH; JEDT

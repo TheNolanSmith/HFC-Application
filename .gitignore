@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+backups/
+config/settings.yaml
+*.p8
+*.pem
+.env
+~$*
